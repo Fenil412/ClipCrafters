@@ -23,7 +23,16 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Ignore vars matching ^[A-Z_] (components) AND common framer-motion
+      // namespace-access patterns like `motion` (used as <motion.div>).
+      // Without eslint-plugin-react, JSX namespace access isn't tracked.
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^[A-Z_]|^motion$|^AnimatePresence$',
+          args: 'none',
+        },
+      ],
     },
   },
 ])

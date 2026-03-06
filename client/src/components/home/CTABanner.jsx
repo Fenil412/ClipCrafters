@@ -1,7 +1,19 @@
+// CTABanner — particles pre-computed at module level (React purity compliant)
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowRight, LayoutDashboard, PlusCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+
+// Pre-generate stable random particle data at module level (never changes on re-render)
+const PARTICLES = Array.from({ length: 8 }, () => ({
+  width:          Math.random() * 6 + 4,
+  height:         Math.random() * 6 + 4,
+  opacity:        Math.random() * 0.4 + 0.1,
+  left:           `${Math.random() * 100}%`,
+  top:            `${Math.random() * 100}%`,
+  animDuration:   `${Math.random() * 3 + 3}s`,
+  animDelay:      `${Math.random() * 2}s`,
+}));
 
 export default function CTABanner() {
   const { isAuthenticated } = useAuth();
@@ -16,21 +28,21 @@ export default function CTABanner() {
         animation: 'gradient-shift 6s ease infinite',
       }} />
 
-      {/* Decorative particles */}
-      {[...Array(8)].map((_, i) => (
+      {/* Decorative particles — data pre-computed at module level to satisfy React purity rules */}
+      {PARTICLES.map((p, i) => (
         <div
           key={i}
           style={{
             position: 'absolute',
-            width: Math.random() * 6 + 4,
-            height: Math.random() * 6 + 4,
+            width: p.width,
+            height: p.height,
             borderRadius: '50%',
             background: 'var(--gold-primary)',
-            opacity: Math.random() * 0.4 + 0.1,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animation: `float ${Math.random() * 3 + 3}s ease-in-out infinite`,
-            animationDelay: `${Math.random() * 2}s`,
+            opacity: p.opacity,
+            left: p.left,
+            top: p.top,
+            animation: `float ${p.animDuration} ease-in-out infinite`,
+            animationDelay: p.animDelay,
           }}
         />
       ))}
@@ -47,7 +59,7 @@ export default function CTABanner() {
             {isAuthenticated ? 'Ready to Create?' : 'Get Started Today'}
           </span>
 
-          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3.5rem)', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3.5rem)', marginBottom: 20, fontFamily: 'var(--font-display)', fontWeight: 900 }}>
             {isAuthenticated ? (
               <>
                 Start Creating Your{' '}
@@ -62,7 +74,7 @@ export default function CTABanner() {
           </h2>
 
           <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginBottom: 40, lineHeight: 1.7 }}>
-            {isAuthenticated 
+            {isAuthenticated
               ? 'Access your dashboard and create professional AI-powered videos in minutes.'
               : 'Join 10,000+ researchers, educators, and experts who trust ClipCrafters for accurate, AI-powered video creation.'
             }
@@ -83,7 +95,7 @@ export default function CTABanner() {
             ) : (
               <>
                 <Link to="/register" className="btn-primary" data-cursor="pointer" style={{ fontSize: '1.05rem', padding: '16px 36px' }}>
-                  Start For Free <ArrowRight size={18} />
+                  Start Creating Free <ArrowRight size={18} />
                 </Link>
                 <Link to="/login" className="btn-ghost" data-cursor="pointer" style={{ fontSize: '1.05rem', padding: '16px 36px' }}>
                   Sign In

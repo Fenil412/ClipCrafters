@@ -4,8 +4,6 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import { useAnimatedCounter } from '../../hooks/index.js';
 import { scaleIn } from '../../utils/animations.js';
 
-const iconModules = {};
-
 const StatWidget = memo(function StatWidget({ label, value, trend, iconName, IconComponent }) {
   const numericValue = typeof value === 'number' ? value : parseInt(value) || 0;
   const { count, ref } = useAnimatedCounter(numericValue, 1500, true);

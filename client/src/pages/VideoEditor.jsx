@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Shield, Download, Film } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Shield, Download, Film, LayoutList } from 'lucide-react';
 import { videoService, sceneService } from '../services/index.js';
 import ScenePanel from '../components/editor/ScenePanel.jsx';
 import VideoPreview from '../components/editor/VideoPreview.jsx';
 import TimelineBar from '../components/editor/TimelineBar.jsx';
 import SceneEditModal from '../components/editor/SceneEditModal.jsx';
+import Storyboard from '../components/editor/Storyboard.jsx';
+import FactCheckModal from '../components/editor/FactCheckModal.jsx';
 import { Spinner } from '../components/ui/index.jsx';
 import ThemeToggle from '../components/ui/ThemeToggle.jsx';
 import { pageTransition } from '../utils/animations.js';
@@ -19,24 +21,32 @@ export default function VideoEditor() {
   const [scenes, setScenes] = useState([]);
   const [selectedScene, setSelectedScene] = useState(null);
   const [editModal, setEditModal] = useState(null);
+  const [storyboardOpen, setStoryboardOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('preview'); // mobile tabs
   const [factChecking, setFactChecking] = useState(false);
+  const [factCheckResults, setFactCheckResults] = useState(null);
+  const [showFactCheckModal, setShowFactCheckModal] = useState(false);
+
+  const fetchEditor = useCallback(async () => {
+    setLoading(true);
+    try {
+      const vidRes = await videoService.getById(id);
+      const vid = vidRes.data.data;
+      setVideo(vid);
+
+      const sceneRes = await sceneService.getByVideoId(id);
+      const sc = sceneRes.data.data || [];
+      setScenes(sc);
+      if (sc.length > 0) setSelectedScene(sc[0]);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to load editor');
+      navigate('/dashboard');
+    } finally { setLoading(false); }
+  }, [id, navigate]);
 
   useEffect(() => {
     if (id) fetchEditor();
-  }, [id]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'ArrowLeft') prevScene();
-      if (e.key === 'ArrowRight') nextScene();
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); /* autosave */ }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [selectedScene, scenes]);
+  }, [id, fetchEditor]);
 
   const prevScene = useCallback(() => {
     const idx = scenes.findIndex((s) => s._id === selectedScene?._id);
@@ -48,22 +58,16 @@ export default function VideoEditor() {
     if (idx < scenes.length - 1) setSelectedScene(scenes[idx + 1]);
   }, [scenes, selectedScene]);
 
-  const fetchEditor = async () => {
-    setLoading(true);
-    try {
-      const vidRes = await videoService.getById(id);
-      const vid = vidRes.data.data;
-      setVideo(vid);
-
-      const sceneRes = await sceneService.getByVideo(id);
-      const sc = sceneRes.data.data || [];
-      setScenes(sc);
-      if (sc.length > 0) setSelectedScene(sc[0]);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load editor');
-      navigate('/dashboard');
-    } finally { setLoading(false); }
-  };
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowLeft') prevScene();
+      if (e.key === 'ArrowRight') nextScene();
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); /* autosave */ }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [nextScene, prevScene]);
 
   const handleSceneSaved = (updated) => {
     setScenes((prev) => prev.map((s) => s._id === updated._id ? { ...s, ...updated } : s));
@@ -72,11 +76,60 @@ export default function VideoEditor() {
   };
 
   const handleFactCheckAll = async () => {
+    if (scenes.length === 0) {
+      toast.error('No scenes to fact-check');
+      return;
+    }
+    
     setFactChecking(true);
     toast.loading(`Checking ${scenes.length} scenes...`, { id: 'factcheck' });
-    await new Promise((r) => setTimeout(r, 1500));
-    toast.success(`Fact-check complete — no issues found`, { id: 'factcheck' });
-    setFactChecking(false);
+    
+    try {
+      const results = await Promise.allSettled(
+        scenes.map(scene => sceneService.factCheck(scene._id))
+      );
+      
+      // Aggregate results
+      const allIssues = [];
+      let totalConfidence = 0;
+      let successCount = 0;
+      
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value?.data?.data) {
+          const data = r.value.data.data;
+          if (data.issues && data.issues.length > 0) {
+            allIssues.push(...data.issues.map(issue => ({
+              ...issue,
+              sceneNumber: scenes[idx].sceneNumber,
+              sceneId: scenes[idx]._id
+            })));
+          }
+          if (data.confidence != null) {
+            totalConfidence += data.confidence;
+            successCount++;
+          }
+        }
+      });
+      
+      const avgConfidence = successCount > 0 ? totalConfidence / successCount : 0;
+      
+      setFactCheckResults({
+        confidence: avgConfidence,
+        issues: allIssues,
+        result: `Checked ${scenes.length} scene(s). ${allIssues.length === 0 ? 'No issues detected.' : `Found ${allIssues.length} potential issue(s) across scenes.`}`
+      });
+      setShowFactCheckModal(true);
+      
+      if (allIssues.length === 0) {
+        toast.success(`Fact-check complete — no issues found`, { id: 'factcheck' });
+      } else {
+        toast.warning(`Found ${allIssues.length} potential issue(s)`, { id: 'factcheck' });
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Fact-check failed', { id: 'factcheck' });
+    } finally {
+      setFactChecking(false);
+    }
   };
 
   if (loading) {
@@ -100,6 +153,9 @@ export default function VideoEditor() {
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => setStoryboardOpen(true)} className="btn-ghost btn-sm" data-cursor="pointer">
+            <LayoutList size={14} /> Storyboard
+          </button>
           <button onClick={handleFactCheckAll} disabled={factChecking} className="btn-ghost btn-sm" data-cursor="pointer">
             {factChecking ? <Spinner size={14} /> : <Shield size={14} />} Fact Check All
           </button>
@@ -155,6 +211,22 @@ export default function VideoEditor() {
       {/* Scene edit modal */}
       {editModal && (
         <SceneEditModal scene={editModal} onClose={() => setEditModal(null)} onSaved={handleSceneSaved} />
+      )}
+
+      {/* Storyboard modal */}
+      <Storyboard
+        videoId={id}
+        isOpen={storyboardOpen}
+        onClose={() => setStoryboardOpen(false)}
+        videoStatus={video?.status || 'completed'}
+      />
+
+      {/* Fact Check Results Modal */}
+      {showFactCheckModal && factCheckResults && (
+        <FactCheckModal
+          result={factCheckResults}
+          onClose={() => setShowFactCheckModal(false)}
+        />
       )}
 
       <style>{`

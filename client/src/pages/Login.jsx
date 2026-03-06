@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -20,19 +20,24 @@ export default function Login() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  if (isAuthenticated) { navigate('/dashboard', { replace: true }); return null; }
+  useEffect(() => {
+    if (isAuthenticated) navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, navigate]);
+
+  if (isAuthenticated) return null; // hide form during redirect
 
   const handleLogin = async () => {
     if (!email || !password) { toast.error('Please fill all fields'); return; }
     setLoading(true);
     try {
       const res = await authService.login({ email, password });
-      const { token, user } = res.data.data;
-      login(token, user);
+      const { token, refreshToken, user } = res.data.data;
+      login(token, user, refreshToken);
       toast.success(`Welcome back, ${user.name}!`);
       navigate('/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      const message = err.userMessage || err.response?.data?.message || 'Login failed';
+      toast.error(message);
     } finally { setLoading(false); }
   };
 
@@ -152,6 +157,21 @@ export default function Login() {
             >
               {loading ? <><Spinner size={18} /> Signing in...</> : 'Sign In'}
             </motion.button>
+
+            <motion.div variants={fadeInUp} style={{ textAlign: 'center', marginBottom: 16 }}>
+              <Link 
+                to="/forgot-password" 
+                style={{ 
+                  color: 'var(--gold-primary)', 
+                  fontSize: '0.85rem', 
+                  textDecoration: 'none',
+                  fontWeight: 500
+                }} 
+                data-cursor="pointer"
+              >
+                Forgot password?
+              </Link>
+            </motion.div>
 
             <motion.div variants={fadeInUp} style={{ textAlign: 'center' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>

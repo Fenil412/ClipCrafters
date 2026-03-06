@@ -3,11 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Save, Wand2, Mic, Image, Shield, RotateCcw } from 'lucide-react';
-import { sceneService, editService, videoService } from '../services/index.js';
+import { sceneService, editService } from '../services/index.js';
 import { ProgressBar, Spinner } from '../components/ui/index.jsx';
 import { formatRelative } from '../utils/formatters.js';
 import { pageTransition } from '../utils/animations.js';
 import ThemeToggle from '../components/ui/ThemeToggle.jsx';
+import FactCheckModal from '../components/editor/FactCheckModal.jsx';
 
 export default function SceneEditor() {
   const { id } = useParams(); // scene ID
@@ -22,11 +23,43 @@ export default function SceneEditor() {
   const [editHistory, setEditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [factCheckResult, setFactCheckResult] = useState(null);
+  const [showFactCheckModal, setShowFactCheckModal] = useState(false);
   const autoSaveTimer = useRef(null);
+
+  const fetchScene = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Try to fetch actual scene from backend
+      try {
+        const scRes = await sceneService.getById(id);
+        const sc = scRes.data.data;
+        setScene(sc);
+        setScript(sc.scriptText || '');
+        setVisualPrompt(sc.visualPrompt || '');
+      } catch {
+        // Fallback if scene not found independently
+        setScene({ _id: id, sceneNumber: 1, scriptText: '', visualPrompt: '', confidenceScore: null, sourceReference: null });
+        setScript('');
+        setVisualPrompt('');
+      }
+
+      // Try to get edit history
+      try {
+        const hRes = await editService.getByScene(id);
+        setEditHistory(hRes.data.data || []);
+      } catch {
+        // history not critical — silently ignore
+      }
+    } catch {
+      toast.error('Failed to load scene');
+      navigate(-1);
+    } finally { setLoading(false); }
+  }, [id, navigate]);
 
   useEffect(() => {
     fetchScene();
-  }, [id]);
+  }, [fetchScene]);
 
   // Autosave
   const triggerAutoSave = useCallback(() => {
@@ -47,55 +80,153 @@ export default function SceneEditor() {
   useEffect(() => {
     if (!loading) triggerAutoSave();
     return () => clearTimeout(autoSaveTimer.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [script, visualPrompt]);
-
-  const fetchScene = async () => {
-    setLoading(true);
-    try {
-      // Get scenes for the video to find our scene
-      // In real scenario we'd have GET /api/scenes/:sceneId — using update as workaround
-      // We'll just load from a local state passed via navigation or use the scene number approach
-      setScene({ _id: id, sceneNumber: 1, scriptText: '', visualPrompt: '', confidenceScore: null, sourceReference: null });
-      setScript('');
-      setVisualPrompt('');
-
-      // Try to get edit history
-      try {
-        const hRes = await editService.getByScene(id);
-        setEditHistory(hRes.data.data || []);
-      } catch {}
-    } catch (err) {
-      toast.error('Failed to load scene');
-      navigate(-1);
-    } finally { setLoading(false); }
-  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await sceneService.update(id, { scriptText: script, visualPrompt });
+      // Store previous values for edit history
+      const previousScript = scene?.scriptText;
+      const previousVisual = scene?.visualPrompt;
+      
+      const res = await sceneService.update(id, { scriptText: script, visualPrompt });
+      const updated = res.data.data?.scene || res.data.data;
+      
+      // Record edit history for script changes
+      if (previousScript !== script) {
+        try {
+          await editService.create({
+            sceneId: id,
+            videoId: scene?.videoId || updated?.videoId,
+            changeType: 'script',
+            before: previousScript,
+            after: script,
+            aiSuggested: false,
+            version: (scene?.version || 0) + 1
+          });
+        } catch (histErr) {
+          console.error('Failed to record script edit history:', histErr);
+        }
+      }
+      
+      // Record edit history for visual prompt changes
+      if (previousVisual !== visualPrompt) {
+        try {
+          await editService.create({
+            sceneId: id,
+            videoId: scene?.videoId || updated?.videoId,
+            changeType: 'visual',
+            before: previousVisual,
+            after: visualPrompt,
+            aiSuggested: false,
+            version: (scene?.version || 0) + 1
+          });
+        } catch (histErr) {
+          console.error('Failed to record visual edit history:', histErr);
+        }
+      }
+      
       toast.success('Scene saved');
       setAutoSaveStatus('saved');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Save failed');
+      
+      // Refresh edit history
+      fetchScene();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Save failed');
     } finally { setSaving(false); }
   };
 
   const handleAiEdit = async () => {
     if (!editInstructions.trim()) { toast.error('Enter edit instructions'); return; }
     setAiEditing(true);
+    
+    // Store previous values
+    const previousScript = script;
+    const previousVisual = visualPrompt;
+    
     try {
       const res = await sceneService.update(id, { scriptText: script, visualPrompt, editInstructions });
-      const updated = res.data.data;
-      setScript(updated.scriptText || script);
-      setVisualPrompt(updated.visualPrompt || visualPrompt);
+      const updated = res.data.data?.scene || res.data.data;
+      
+      const newScript = updated.scriptText || script;
+      const newVisual = updated.visualPrompt || visualPrompt;
+      
+      setScript(newScript);
+      setVisualPrompt(newVisual);
+      
+      // Record AI edit history
+      if (previousScript !== newScript || previousVisual !== newVisual) {
+        try {
+          await editService.create({
+            sceneId: id,
+            videoId: scene?.videoId || updated?.videoId,
+            changeType: previousScript !== newScript ? 'script' : 'visual',
+            before: previousScript !== newScript ? previousScript : previousVisual,
+            after: previousScript !== newScript ? newScript : newVisual,
+            aiSuggested: true,
+            version: (scene?.version || 0) + 1
+          });
+        } catch (histErr) {
+          console.error('Failed to record AI edit history:', histErr);
+        }
+      }
+      
       toast.success('AI edit applied');
       setEditInstructions('');
-      const hRes = await editService.getByScene(id);
-      setEditHistory(hRes.data.data || []);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'AI edit failed');
+      
+      // Refresh edit history
+      fetchScene();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'AI edit failed');
     } finally { setAiEditing(false); }
+  };
+
+  const handleRegenerate = async (type) => {
+    toast.loading(`Regenerating ${type}...`, { id: 'regen' });
+    try {
+      const res = await sceneService.regenerate(id, type);
+      const updated = res.data.data?.scene || res.data.data;
+      setScene(updated);
+      if (updated.scriptText) setScript(updated.scriptText);
+      if (updated.visualPrompt) setVisualPrompt(updated.visualPrompt);
+      toast.success(`${type === 'audio' ? 'Audio' : 'Visuals'} regenerated`, { id: 'regen' });
+      fetchScene(); // Refresh to get latest data
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Regeneration failed', { id: 'regen' });
+    }
+  };
+
+  const handleUndo = async (editId) => {
+    toast.loading('Undoing edit...', { id: 'undo' });
+    try {
+      const res = await editService.undo(editId);
+      const updated = res.data.data?.scene || res.data.data;
+      if (updated.scriptText !== undefined) setScript(updated.scriptText);
+      if (updated.visualPrompt !== undefined) setVisualPrompt(updated.visualPrompt);
+      toast.success('Edit undone', { id: 'undo' });
+      fetchScene(); // Refresh history
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Undo failed', { id: 'undo' });
+    }
+  };
+
+  const handleFactCheck = async () => {
+    toast.loading('Fact-checking scene...', { id: 'factcheck' });
+    try {
+      const res = await sceneService.factCheck(id);
+      const result = res.data.data;
+      setFactCheckResult(result);
+      setShowFactCheckModal(true);
+      
+      if (result.issues && result.issues.length > 0) {
+        toast.success(`Fact-check complete — found ${result.issues.length} issue(s)`, { id: 'factcheck' });
+      } else {
+        toast.success('Fact-check complete — no issues found', { id: 'factcheck' });
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Fact-check failed', { id: 'factcheck' });
+    }
   };
 
   if (loading) {
@@ -167,8 +298,9 @@ export default function SceneEditor() {
             <button onClick={handleSave} disabled={saving} className="btn-primary btn-sm" data-cursor="pointer">
               {saving ? <><Spinner size={14} /> Saving...</> : <><Save size={14} /> Save</>}
             </button>
-            <button className="btn-ghost btn-sm" data-cursor="pointer"><Mic size={14} /> Regen Audio</button>
-            <button className="btn-ghost btn-sm" data-cursor="pointer"><Image size={14} /> Regen Visuals</button>
+            <button onClick={() => handleRegenerate('audio')} className="btn-ghost btn-sm" data-cursor="pointer"><Mic size={14} /> Regen Audio</button>
+            <button onClick={() => handleRegenerate('visuals')} className="btn-ghost btn-sm" data-cursor="pointer"><Image size={14} /> Regen Visuals</button>
+            <button onClick={handleFactCheck} className="btn-ghost btn-sm" data-cursor="pointer"><Shield size={14} /> Fact Check</button>
             <button onClick={() => navigate(-1)} className="btn-ghost btn-sm" data-cursor="pointer">Cancel</button>
           </div>
         </div>
@@ -222,7 +354,7 @@ export default function SceneEditor() {
                   >
                     <span className={`badge ${edit.aiSuggested ? 'badge-gold' : 'badge-draft'}`} style={{ fontSize: '0.6rem', flexShrink: 0 }}>{edit.editType}</span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flex: 1 }}>{formatRelative(edit.createdAt)}</span>
-                    <button className="btn-icon" style={{ width: 24, height: 24, flexShrink: 0 }} title="Undo" data-cursor="pointer">
+                    <button onClick={() => handleUndo(edit._id)} className="btn-icon" style={{ width: 24, height: 24, flexShrink: 0 }} title="Undo" data-cursor="pointer">
                       <RotateCcw size={11} />
                     </button>
                   </motion.div>
@@ -232,6 +364,14 @@ export default function SceneEditor() {
           </div>
         </div>
       </div>
+
+      {/* Fact Check Modal */}
+      {showFactCheckModal && factCheckResult && (
+        <FactCheckModal
+          result={factCheckResult}
+          onClose={() => setShowFactCheckModal(false)}
+        />
+      )}
     </motion.div>
   );
 }

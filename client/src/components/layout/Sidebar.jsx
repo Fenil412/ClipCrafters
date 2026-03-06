@@ -13,15 +13,9 @@ const NAV = [
   { label: 'Profile', icon: User, route: '/profile' },
 ];
 
-export default function Sidebar({ isMobileOpen, onMobileClose }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleLogout = () => { logout(); navigate('/'); };
-
-  const SidebarContent = ({ mobile = false }) => (
+// ─── SidebarContent extracted outside component to avoid "component created during render" error ──
+function SidebarContent({ mobile, collapsed, location, user, onMobileClose, onLogout }) {
+  return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo */}
       <div style={{ padding: collapsed ? '20px 16px' : '20px 20px', borderBottom: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between' }}>
@@ -104,7 +98,7 @@ export default function Sidebar({ isMobileOpen, onMobileClose }) {
         )}
 
         <button
-          onClick={handleLogout}
+          onClick={onLogout}
           data-cursor="pointer"
           style={{
             display: 'flex', alignItems: 'center', gap: 10,
@@ -124,6 +118,15 @@ export default function Sidebar({ isMobileOpen, onMobileClose }) {
       </div>
     </div>
   );
+}
+
+export default function Sidebar({ isMobileOpen, onMobileClose }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => { logout(); navigate('/'); };
 
   return (
     <>
@@ -140,7 +143,14 @@ export default function Sidebar({ isMobileOpen, onMobileClose }) {
         }}
         className="sidebar-desktop"
       >
-        <SidebarContent />
+        <SidebarContent
+          mobile={false}
+          collapsed={collapsed}
+          location={location}
+          user={user}
+          onMobileClose={onMobileClose}
+          onLogout={handleLogout}
+        />
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -179,7 +189,14 @@ export default function Sidebar({ isMobileOpen, onMobileClose }) {
                 zIndex: 200,
               }}
             >
-              <SidebarContent mobile />
+              <SidebarContent
+                mobile
+                collapsed={false}
+                location={location}
+                user={user}
+                onMobileClose={onMobileClose}
+                onLogout={handleLogout}
+              />
             </motion.aside>
           </>
         )}

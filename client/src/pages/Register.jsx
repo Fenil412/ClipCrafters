@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -43,7 +43,11 @@ export default function Register() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  if (isAuthenticated) { navigate('/dashboard', { replace: true }); return null; }
+  useEffect(() => {
+    if (isAuthenticated) navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, navigate]);
+
+  if (isAuthenticated) return null; // hide form during redirect
 
   const handleRegister = async () => {
     if (!name || !email || !password) { toast.error('Please fill all fields'); return; }
@@ -53,12 +57,13 @@ export default function Register() {
     setLoading(true);
     try {
       const res = await authService.register({ name, email, password });
-      const { token, user } = res.data.data;
-      login(token, user);
+      const { token, refreshToken, user } = res.data.data;
+      login(token, user, refreshToken);
       toast.success(`Welcome to ClipCrafters, ${user.name}!`);
       navigate('/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
+      const message = err.userMessage || err.response?.data?.message || 'Registration failed';
+      toast.error(message);
     } finally { setLoading(false); }
   };
 

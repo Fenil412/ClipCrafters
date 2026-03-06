@@ -235,9 +235,9 @@ export default function PricingCards() {
           transition={{ duration: 0.7 }}
           style={{ textAlign: 'center', marginBottom: 48 }}
         >
-          <span className="section-label" style={{ marginBottom: 20, display: 'inline-flex' }}>Pricing</span>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)', marginBottom: 16 }}>
-            Simple, <span className="gradient-text">Transparent</span> Pricing
+          <span className="section-label" style={{ marginBottom: 20, display: 'inline-flex' }}>✦ PRICING</span>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)', marginBottom: 16, fontFamily: 'var(--font-display)', fontWeight: 900 }}>
+            Simple, <span className="gradient-text">transparent pricing</span>
           </h2>
 
           {/* Toggle */}

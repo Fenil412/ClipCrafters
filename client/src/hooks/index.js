@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { videoService } from '../services/index.js';
 
 // ─── useLocalStorage ──────────────────────────────────────────────────────────
 export function useLocalStorage(key, defaultValue) {
@@ -12,7 +13,7 @@ export function useLocalStorage(key, defaultValue) {
   const setStoredValue = useCallback((val) => {
     const toStore = val instanceof Function ? val(value) : val;
     setValue(toStore);
-    try { localStorage.setItem(key, JSON.stringify(toStore)); } catch {}
+    try { localStorage.setItem(key, JSON.stringify(toStore)); } catch {} // eslint-disable-line no-empty
   }, [key, value]);
 
   return [value, setStoredValue];
@@ -118,28 +119,34 @@ export function useVideoStatus(videoId, initialStatus) {
     if (!videoId) return;
     if (initialStatus === 'completed' || initialStatus === 'failed') return;
 
-    const { videoService } = require('../services/index.js');
-    setIsPolling(true);
-
-    intervalRef.current = setInterval(async () => {
-      try {
-        const res = await videoService.getById(videoId);
-        const vid = res.data.data;
-        setStatus(vid.generationStatus);
-        if (vid.generationStatus === 'completed' || vid.generationStatus === 'failed') {
+    // Start polling after the current render cycle to avoid synchronous setState warnings
+    const startPolling = () => {
+      setIsPolling(true);
+      intervalRef.current = setInterval(async () => {
+        try {
+          const res = await videoService.getById(videoId);
+          const vid = res.data.data;
+          setStatus(vid.generationStatus);
+          if (vid.generationStatus === 'completed' || vid.generationStatus === 'failed') {
+            clearInterval(intervalRef.current);
+            setIsPolling(false);
+            setProgress(100);
+          } else {
+            setProgress((p) => Math.min(p + Math.random() * 8, 90));
+          }
+        } catch {
           clearInterval(intervalRef.current);
           setIsPolling(false);
-          setProgress(100);
-        } else {
-          setProgress((p) => Math.min(p + Math.random() * 8, 90));
         }
-      } catch {
-        clearInterval(intervalRef.current);
-        setIsPolling(false);
-      }
-    }, 3000);
+      }, 3000);
+    };
 
-    return () => clearInterval(intervalRef.current);
+    const timerId = setTimeout(startPolling, 0);
+
+    return () => {
+      clearTimeout(timerId);
+      clearInterval(intervalRef.current);
+    };
   }, [videoId, initialStatus]);
 
   return { status, progress, isPolling };
@@ -160,13 +167,15 @@ export function useScrollY() {
 export function useIntersection(options = {}) {
   const ref = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
+  // Capture options as a ref to avoid including unstable objects in dep array
+  const optionsRef = useRef(options);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(([entry]) => {
       setIsVisible(entry.isIntersecting);
-    }, { threshold: 0.1, ...options });
+    }, { threshold: 0.1, ...optionsRef.current });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);

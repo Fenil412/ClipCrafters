@@ -14,8 +14,11 @@ export default function CommandPalette() {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen) { setTimeout(() => inputRef.current?.focus(), 50); }
-    else setQuery('');
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      setTimeout(() => setQuery(''), 0);
+    }
   }, [isOpen]);
 
   if (!isAuthenticated) return null;

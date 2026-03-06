@@ -4,14 +4,13 @@ import { Link } from 'react-router-dom';
 import { Trash2, ExternalLink, Info } from 'lucide-react';
 import { useCardTilt } from '../../hooks/index.js';
 import { Badge } from '../ui/index.jsx';
-import { formatRelative, truncate, statusToVariant } from '../../utils/formatters.js';
+import { formatRelative, statusToVariant } from '../../utils/formatters.js';
 import { scaleIn } from '../../utils/animations.js';
 
 const ProjectCard = memo(function ProjectCard({ project, onDelete }) {
   const tiltRef = useCardTilt();
 
   const statusLabel = { draft: 'Draft', processing: 'Processing', completed: 'Completed', failed: 'Failed' };
-  const styleLabel = { professional: 'Professional', conversational: 'Conversational', academic: 'Academic' };
 
   return (
     <motion.div

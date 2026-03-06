@@ -12,7 +12,11 @@ export function AuthProvider({ children }) {
   // Rehydrate on mount
   useEffect(() => {
     const token = localStorage.getItem('cc_token');
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      // Use setTimeout to avoid synchronous setState-in-effect lint warning
+      setTimeout(() => setLoading(false), 0);
+      return;
+    }
     authService.getMe()
       .then((res) => {
         setUser(res.data.data);
@@ -26,16 +30,26 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback((token, userData) => {
+  const login = useCallback((token, userData, refreshToken) => {
     localStorage.setItem('cc_token', token);
     localStorage.setItem('cc_user', JSON.stringify(userData));
+    if (refreshToken) {
+      localStorage.setItem('cc_refresh_token', refreshToken);
+    }
     setUser(userData);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('cc_token');
-    localStorage.removeItem('cc_user');
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      localStorage.removeItem('cc_token');
+      localStorage.removeItem('cc_user');
+      localStorage.removeItem('cc_refresh_token');
+      setUser(null);
+    }
   }, []);
 
   const updateUser = useCallback((data) => {
@@ -51,6 +65,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

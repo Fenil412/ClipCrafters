@@ -28,7 +28,7 @@ const userSchema = new Schema(
             type: String,
             required: [true, 'Password is required'],
             minlength: [8, 'Password must be at least 8 characters'],
-            select: false, // Exclude password from default queries
+            select: false,
         },
 
         role: {
@@ -41,8 +41,14 @@ const userSchema = new Schema(
         },
 
         avatar: {
+            publicId: { type: String, default: null },
+            url: { type: String, default: null },
+        },
+
+        phone: {
             type: String,
             default: null,
+            trim: true,
         },
 
         projects: [
@@ -51,6 +57,43 @@ const userSchema = new Schema(
                 ref: 'Project',
             },
         ],
+
+        // Password management
+        passwordResetOtp: {
+            type: String,
+            select: false,
+        },
+
+        passwordResetOtpExpiresAt: {
+            type: Date,
+            select: false,
+        },
+
+        // Activity tracking
+        activityHistory: [
+            {
+                action: { type: String, required: true },
+                metadata: { type: Schema.Types.Mixed, default: {} },
+                createdAt: { type: Date, default: Date.now },
+            },
+        ],
+
+        lastActiveAt: {
+            type: Date,
+            default: Date.now,
+        },
+
+        // Soft delete
+        isDeleted: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+
+        deletedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true,

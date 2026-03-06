@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Film, Edit3, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Film, Edit3, RefreshCw, AlertCircle, Loader2, Upload } from 'lucide-react';
 import { projectService, videoService } from '../services/index.js';
 import Sidebar from '../components/layout/Sidebar.jsx';
 import { Badge, ProgressBar, Spinner } from '../components/ui/index.jsx';
-import { statusToVariant, formatDate, formatDurationLong } from '../utils/formatters.js';
+import { statusToVariant, formatDate } from '../utils/formatters.js';
 import { pageTransition } from '../utils/animations.js';
+import VideoUpload from '../components/project/VideoUpload.jsx';
 
 const STATUS_MESSAGES = [
   'Analyzing content...',
@@ -22,38 +23,15 @@ export default function ProjectDetails() {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [video, setVideo] = useState(null);
-  const [scenes, setScenes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [msgIdx, setMsgIdx] = useState(0);
   const [fakeProgress, setFakeProgress] = useState(0);
   const [editingTitle, setEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
-  useEffect(() => {
-    fetchProject();
-  }, [id]);
-
-  // Status poller
-  useEffect(() => {
-    if (!video || video.generationStatus === 'completed' || video.generationStatus === 'failed') return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await videoService.getById(video._id);
-        setVideo(res.data.data);
-        setFakeProgress((p) => Math.min(p + Math.random() * 10, 95));
-        setMsgIdx((m) => Math.min(m + 1, STATUS_MESSAGES.length - 1));
-        if (res.data.data.generationStatus === 'completed') {
-          clearInterval(interval);
-          setFakeProgress(100);
-          fetchProject();
-        }
-      } catch {}
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [video?._id, video?.generationStatus]);
-
-  const fetchProject = async () => {
+  const fetchProject = useCallback(async () => {
     setLoading(true);
     try {
       const res = await projectService.getById(id);
@@ -69,11 +47,38 @@ export default function ProjectDetails() {
           setVideo(vRes.data.data);
         }
       }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load project');
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to load project');
       navigate('/dashboard');
     } finally { setLoading(false); }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchProject();
+  }, [fetchProject]);
+
+
+  // Status poller
+  useEffect(() => {
+    if (!video || video.generationStatus === 'completed' || video.generationStatus === 'failed') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await videoService.getById(video._id);
+        setVideo(res.data.data);
+        setFakeProgress((p) => Math.min(p + Math.random() * 10, 95));
+        setMsgIdx((m) => Math.min(m + 1, STATUS_MESSAGES.length - 1));
+        if (res.data.data.generationStatus === 'completed') {
+          clearInterval(interval);
+          setFakeProgress(100);
+          fetchProject();
+        }
+      // eslint-disable-next-line no-empty
+      } catch {} 
+    }, 3000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video?._id, video?.generationStatus, fetchProject]);
+
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -94,8 +99,8 @@ export default function ProjectDetails() {
       setProject((p) => ({ ...p, title: newTitle }));
       setEditingTitle(false);
       toast.success('Title updated');
-    } catch (err) {
-      toast.error('Failed to update title');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to update title');
     }
   };
 
@@ -161,9 +166,14 @@ export default function ProjectDetails() {
               <Film size={56} color="var(--text-muted)" style={{ marginBottom: 16, opacity: 0.5 }} />
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 700, marginBottom: 12 }}>Generate Your Video</h3>
               <p style={{ color: 'var(--text-secondary)', marginBottom: 28 }}>Start AI generation to create scenes from your content.</p>
-              <button onClick={handleGenerate} disabled={generating} className="btn-primary" data-cursor="pointer" style={{ padding: '14px 32px', fontSize: '1rem' }}>
-                {generating ? <><Spinner size={18} /> Starting...</> : '✦ Generate Video'}
-              </button>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button onClick={handleGenerate} disabled={generating} className="btn-primary" data-cursor="pointer" style={{ padding: '14px 32px', fontSize: '1rem' }}>
+                  {generating ? <><Spinner size={18} /> Starting...</> : '✦ Generate Video'}
+                </button>
+                <button onClick={() => setShowUploadModal(true)} className="btn-ghost" data-cursor="pointer" style={{ padding: '14px 32px', fontSize: '1rem' }}>
+                  <Upload size={18} /> Upload Video
+                </button>
+              </div>
             </div>
           )}
 
@@ -222,6 +232,18 @@ export default function ProjectDetails() {
           )}
         </div>
       </main>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <VideoUpload
+          projectId={id}
+          onUploadComplete={(uploadedVideo) => {
+            setVideo(uploadedVideo);
+            fetchProject();
+          }}
+          onClose={() => setShowUploadModal(false)}
+        />
+      )}
 
       <style>{`@media (max-width: 1023px) { main[style] { margin-left: 0 !important; } }`}</style>
     </motion.div>

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Edit3, Shield, Brain, Activity, History, Zap } from 'lucide-react';
-import { staggerContainer, fadeInUp, scaleIn } from '../../utils/animations.js';
+import { staggerContainer, scaleIn } from '../../utils/animations.js';
 import { FEATURES } from '../../utils/seedData.js';
 import { useCardTilt } from '../../hooks/index.js';
 

@@ -1,5 +1,4 @@
 import { ProgressBar } from '../ui/index.jsx';
-import { formatters } from '../../utils/formatters.js';
 
 const statusDot = {
   completed: '#4ade80',

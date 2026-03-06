@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TESTIMONIALS } from '../../utils/seedData.js';
@@ -10,18 +10,18 @@ export default function TestimonialsSlider() {
   const containerRef = useRef(null);
   const touchStartX = useRef(null);
 
-  const go = (idx, direction = 1) => {
+  const go = useCallback((idx, direction = 1) => {
     setDir(direction);
     setCurrent((idx + TESTIMONIALS.length) % TESTIMONIALS.length);
-  };
+  }, []);
 
-  const next = () => go(current + 1, 1);
-  const prev = () => go(current - 1, -1);
+  const next = useCallback(() => go(current + 1, 1), [go, current]);
+  const prev = useCallback(() => go(current - 1, -1), [go, current]);
 
-  const startAuto = () => { intervalRef.current = setInterval(next, 5000); };
-  const stopAuto = () => clearInterval(intervalRef.current);
+  const stopAuto = useCallback(() => clearInterval(intervalRef.current), []);
+  const startAuto = useCallback(() => { intervalRef.current = setInterval(next, 5000); }, [next]);
 
-  useEffect(() => { startAuto(); return stopAuto; }, [current]);
+  useEffect(() => { startAuto(); return stopAuto; }, [current, startAuto, stopAuto]);
 
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {

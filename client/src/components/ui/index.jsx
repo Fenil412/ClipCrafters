@@ -61,3 +61,11 @@ export function SkeletonCard({ count = 3 }) {
     </>
   );
 }
+
+// Export additional UI components
+export { default as Loader } from './Loader.jsx';
+export { default as ThemeToggle } from './ThemeToggle.jsx';
+export { default as CustomCursor } from './CustomCursor.jsx';
+export { default as ParticleField } from './ParticleField.jsx';
+export { default as CommandPalette } from './CommandPalette.jsx';
+export { default as RateLimitNotice } from './RateLimitNotice.jsx';
