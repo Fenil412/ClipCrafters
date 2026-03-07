@@ -21,6 +21,16 @@ class VideoProcessorService:
     """Service for processing videos: extract frames, detect scenes, rebuild video."""
     
     @staticmethod
+    def _get_ffmpeg_cmd() -> str:
+        """Get FFmpeg command (configured, local, or system PATH)."""
+        return settings.ffmpeg_executable
+    
+    @staticmethod
+    def _get_ffprobe_cmd() -> str:
+        """Get FFprobe command (configured, local, or system PATH)."""
+        return settings.ffprobe_executable
+    
+    @staticmethod
     def extract_frames(video_path: str, output_dir: str, fps: Optional[int] = None) -> Dict:
         """
         Extract all frames from video using FFmpeg.
@@ -39,8 +49,9 @@ class VideoProcessorService:
         metadata = VideoProcessorService.get_video_metadata(video_path)
         
         # Build FFmpeg command
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-i", video_path,
         ]
         
@@ -81,8 +92,9 @@ class VideoProcessorService:
     @staticmethod
     def get_video_metadata(video_path: str) -> Dict:
         """Extract video metadata using FFprobe."""
+        ffprobe_cmd = VideoProcessorService._get_ffprobe_cmd()
         cmd = [
-            "ffprobe",
+            ffprobe_cmd,
             "-v", "quiet",
             "-print_format", "json",
             "-show_format",
@@ -134,8 +146,9 @@ class VideoProcessorService:
         Returns:
             List of scene timestamps
         """
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-i", video_path,
             "-vf", f"select='gt(scene,{threshold/100})',showinfo",
             "-f", "null",
@@ -174,8 +187,9 @@ class VideoProcessorService:
     @staticmethod
     def extract_audio(video_path: str, output_path: str) -> str:
         """Extract audio from video."""
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-i", video_path,
             "-vn",  # No video
             "-acodec", "libmp3lame",
@@ -214,8 +228,9 @@ class VideoProcessorService:
             Path to output video
         """
         # Build FFmpeg command
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-framerate", str(fps),
             "-i", os.path.join(frames_dir, "frame_%05d.png"),
             "-c:v", codec,
@@ -281,8 +296,9 @@ class VideoProcessorService:
             
             clip_path = os.path.join(output_dir, f"scene_{i:03d}.mp4")
             
+            ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
             cmd = [
-                "ffmpeg",
+                ffmpeg_cmd,
                 "-i", video_path,
                 "-ss", str(start),
                 "-t", str(duration),
@@ -319,8 +335,9 @@ class VideoProcessorService:
             for path in video_paths:
                 f.write(f"file '{os.path.abspath(path)}'\n")
         
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-f", "concat",
             "-safe", "0",
             "-i", concat_file,
@@ -370,8 +387,9 @@ class VideoProcessorService:
     @staticmethod
     def get_frame_at_timestamp(video_path: str, timestamp: float, output_path: str) -> str:
         """Extract a single frame at specific timestamp."""
+        ffmpeg_cmd = VideoProcessorService._get_ffmpeg_cmd()
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-ss", str(timestamp),
             "-i", video_path,
             "-frames:v", "1",

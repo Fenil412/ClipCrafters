@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.responses import FileResponse
 
 from app.api.routes import _get_doc, _load_script
@@ -161,6 +161,79 @@ async def generate_scene_image(project_id: str, scene_id: str, request: AssetGen
     finally:
         _update_scene(project_id, scene_id, scene)
         
+    return scene
+
+
+@router.post("/scenes/{scene_id}/upload-image", response_model=SceneResponse)
+async def upload_scene_image(
+    project_id: str,
+    scene_id: str,
+    file: UploadFile = File(...)
+):
+    """Upload a custom image for the scene."""
+    scene = _get_scene(project_id, scene_id)
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
+        )
+    
+    # Validate file size (max 10MB)
+    max_size = 10 * 1024 * 1024  # 10MB
+    file_content = await file.read()
+    if len(file_content) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail="File size exceeds 10MB limit"
+        )
+    
+    scene.image_status = AssetStatus.GENERATING
+    _update_scene(project_id, scene_id, scene)
+    
+    proj_dir = ProjectMetadataManager.get_project_dir(project_id)
+    images_dir = os.path.join(proj_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    
+    # Save as JPG (convert if needed)
+    image_path = os.path.join(images_dir, f"{scene_id}.jpg")
+    
+    try:
+        # Save and convert to JPG if needed
+        from PIL import Image
+        import io
+        
+        img = Image.open(io.BytesIO(file_content))
+        
+        # Convert to RGB if necessary (for PNG with transparency)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        
+        # Save as JPG
+        img.save(image_path, 'JPEG', quality=95)
+        
+        scene.image_path = image_path
+        scene.image_status = AssetStatus.READY
+        scene.clip_status = AssetStatus.MISSING  # Mark clip as needing rebuild
+        scene.status = SceneStatus.PROCESSING
+        scene.enriched_prompt = f"Custom uploaded image: {file.filename}"
+        
+        logger.info(f"Uploaded custom image for scene {scene_id}: {file.filename}")
+        
+    except Exception as e:
+        scene.image_status = AssetStatus.ERROR
+        scene.error_message = f"Failed to process uploaded image: {str(e)}"
+        logger.error(f"Image upload failed for scene {scene_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        _update_scene(project_id, scene_id, scene)
+    
     return scene
 
 

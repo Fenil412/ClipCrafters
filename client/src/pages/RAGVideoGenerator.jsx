@@ -224,6 +224,50 @@ export default function RAGVideoGenerator() {
     }
   };
 
+  const handleUploadImage = async (sceneId, file) => {
+    try {
+      // Validate file size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be less than 10MB');
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Please upload a JPG, PNG, or WebP image');
+        return;
+      }
+
+      updateSceneInState(sceneId, { image_status: 'generating' });
+      toast.info('Uploading image...');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await axios.post(
+        `${API_URL}/scenes/${sceneId}/upload-image?project_id=${currentDocId}`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      updateSceneInState(sceneId, { image_status: 'ready', clip_status: 'outdated' });
+      if (finalVideo) {
+        setShowFastRebuild(true);
+        toast.success('Image uploaded! Render clip and update video to see changes.');
+      } else {
+        toast.success('Image uploaded successfully!');
+      }
+    } catch (err) {
+      toast.error(`Image upload failed: ${err.response?.data?.detail || err.message}`);
+      updateSceneInState(sceneId, { image_status: 'error' });
+    }
+  };
+
   const handleGenerateClip = async (sceneId) => {
     try {
       updateSceneInState(sceneId, { clip_status: 'generating' });
@@ -676,6 +720,7 @@ export default function RAGVideoGenerator() {
               onAnalyzeVisual={handleAnalyzeVisual}
               onGenerateAudio={handleGenerateAudio}
               onGenerateImage={handleGenerateImage}
+              onUploadImage={handleUploadImage}
               onGenerateClip={handleGenerateClip}
               onGenerateAllAudio={handleGenerateAllAudio}
               onGenerateAllImages={handleGenerateAllImages}
@@ -693,7 +738,7 @@ export default function RAGVideoGenerator() {
 }
 
 // ── Storyboard Section Component ──────────────────────────────────────
-function StoryboardSection({ scenes, currentDocId, storyboardStatus, finalVideo, showFastRebuild, onGenerateStoryboard, onAssembleClips, onRenderFinal, onFastRebuild, onDownloadVideo, onSaveNarration, onSavePrompt, onAnalyzeVisual, onGenerateAudio, onGenerateImage, onGenerateClip, onGenerateAllAudio, onGenerateAllImages, onRenderAllClips, onAssembleAndRender, setFinalVideo }) {
+function StoryboardSection({ scenes, currentDocId, storyboardStatus, finalVideo, showFastRebuild, onGenerateStoryboard, onAssembleClips, onRenderFinal, onFastRebuild, onDownloadVideo, onSaveNarration, onSavePrompt, onAnalyzeVisual, onGenerateAudio, onGenerateImage, onUploadImage, onGenerateClip, onGenerateAllAudio, onGenerateAllImages, onRenderAllClips, onAssembleAndRender, setFinalVideo }) {
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('script');
   const [editedNarration, setEditedNarration] = useState('');
@@ -1105,11 +1150,43 @@ function StoryboardSection({ scenes, currentDocId, storyboardStatus, finalVideo,
                   <button
                     onClick={() => onAnalyzeVisual(selectedScene.scene_id, 'cinematic_educational')}
                     disabled={selectedScene.analyzing}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded-lg hover:opacity-90 transition-all font-semibold text-sm w-full justify-center disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/40 rounded-lg hover:opacity-90 transition-all font-semibold text-sm w-full justify-center disabled:opacity-50 mb-4"
                   >
                     <Wand2 className="w-4 h-4" />
                     {selectedScene.analyzing ? 'Analyzing...' : 'Analyze Visual'}
                   </button>
+
+                  {/* Upload Custom Image */}
+                  <div className="border-t border-[var(--border-default)] pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Upload className="w-4 h-4 text-[var(--text-muted)]" />
+                      <span className="text-xs font-semibold text-[var(--text-muted)] uppercase">Or Upload Custom Image</span>
+                    </div>
+                    <input
+                      type="file"
+                      id={`image-upload-${selectedScene.scene_id}`}
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          onUploadImage(selectedScene.scene_id, file);
+                          e.target.value = ''; // Reset input
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => document.getElementById(`image-upload-${selectedScene.scene_id}`).click()}
+                      disabled={selectedScene.image_status === 'generating'}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 rounded-lg hover:opacity-90 transition-all font-semibold text-sm w-full justify-center disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Browse & Upload Image
+                    </button>
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">
+                      Supported: JPG, PNG, WebP (max 10MB)
+                    </p>
+                  </div>
                 </>
               )}
 

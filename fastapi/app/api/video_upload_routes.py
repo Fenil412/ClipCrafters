@@ -32,17 +32,29 @@ router = APIRouter(prefix="/video-upload", tags=["Video Upload & Processing"])
 def check_ffmpeg_available() -> tuple[bool, str]:
     """Check if FFmpeg is installed and available."""
     try:
+        # Use configured path, local installation, or system PATH
+        ffmpeg_cmd = settings.ffmpeg_executable
+        
         result = subprocess.run(
-            ["ffmpeg", "-version"],
+            [ffmpeg_cmd, "-version"],
             capture_output=True,
             text=True,
             timeout=5
         )
         if result.returncode == 0:
-            return True, "FFmpeg is available"
+            version_line = result.stdout.split('\n')[0] if result.stdout else "Unknown version"
+            location = "local installation" if "ffmpeg/bin" in ffmpeg_cmd else "system PATH" if ffmpeg_cmd == "ffmpeg" else "configured path"
+            return True, f"FFmpeg is available ({location}): {version_line}"
         return False, "FFmpeg command failed"
     except FileNotFoundError:
-        return False, "FFmpeg not found. Please install FFmpeg: https://ffmpeg.org/download.html"
+        return False, (
+            "FFmpeg not found. Please run: python download_ffmpeg.py\n"
+            "This will download FFmpeg to fastapi/ffmpeg/ folder.\n"
+            "Alternatively:\n"
+            "1. Download from: https://www.gyan.dev/ffmpeg/builds/ (use 'full' build)\n"
+            "2. Extract to fastapi/ffmpeg/\n"
+            "3. Restart the server"
+        )
     except Exception as e:
         return False, f"FFmpeg check failed: {str(e)}"
 
@@ -50,23 +62,34 @@ def check_ffmpeg_available() -> tuple[bool, str]:
 def check_ffprobe_available() -> tuple[bool, str]:
     """Check if FFprobe is installed and available."""
     try:
+        # Use configured path, local installation, or system PATH
+        ffprobe_cmd = settings.ffprobe_executable
+        
         result = subprocess.run(
-            ["ffprobe", "-version"],
+            [ffprobe_cmd, "-version"],
             capture_output=True,
             text=True,
             timeout=5
         )
         if result.returncode == 0:
-            return True, "FFprobe is available"
+            version_line = result.stdout.split('\n')[0] if result.stdout else "Unknown version"
+            location = "local installation" if "ffmpeg/bin" in ffprobe_cmd else "system PATH" if ffprobe_cmd == "ffprobe" else "configured path"
+            return True, f"FFprobe is available ({location}): {version_line}"
         return False, "FFprobe command failed"
     except FileNotFoundError:
-        return False, "FFprobe not found. Please install FFmpeg: https://ffmpeg.org/download.html"
+        return False, "FFprobe not found. Run: python download_ffmpeg.py"
     except Exception as e:
         return False, f"FFprobe check failed: {str(e)}"
 
 
 def get_video_processor():
     """Get the appropriate video processor (real or mock)."""
+    # Check if mock mode is explicitly enabled
+    if settings.use_mock_processor:
+        logger.warning("Using MockVideoProcessorService (mock mode enabled in config)")
+        return MockVideoProcessorService
+    
+    # Check FFmpeg availability
     ffmpeg_ok, _ = check_ffmpeg_available()
     if ffmpeg_ok:
         return VideoProcessorService
@@ -345,7 +368,7 @@ async def extract_frames_from_video(
     if not ffmpeg_ok:
         raise HTTPException(
             status_code=503,
-            detail=f"FFmpeg is required but not available: {ffmpeg_msg}"
+            detail=f"FFmpeg is required but not available: {ffmpeg_msg}. Please install FFmpeg and restart the server. See FFMPEG_TROUBLESHOOTING.md for help."
         )
     
     metadata = ProjectMetadataManager.load_metadata(project_id)
@@ -353,12 +376,22 @@ async def extract_frames_from_video(
         raise HTTPException(status_code=404, detail="Project not found")
     
     if not metadata.video_path or not os.path.exists(metadata.video_path):
-        raise HTTPException(status_code=404, detail="Video file not found")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Video file not found at path: {metadata.video_path if metadata.video_path else 'No path set'}"
+        )
     
     try:
         processor = get_video_processor()
         project_dir = ProjectMetadataManager.get_project_dir(project_id)
         frames_dir = os.path.join(project_dir, "frames")
+        
+        # Verify video file is readable
+        if not os.access(metadata.video_path, os.R_OK):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot read video file. Check file permissions: {metadata.video_path}"
+            )
         
         # Extract frames
         frame_info = processor.extract_frames(
@@ -383,11 +416,20 @@ async def extract_frames_from_video(
             message=f"Extracted {frame_info['frame_count']} frames successfully"
         )
         
-    except Exception as e:
-        logger.error(f"Frame extraction failed: {e}")
+    except HTTPException:
+        raise
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr if hasattr(e, 'stderr') else str(e)
+        logger.error(f"FFmpeg process failed: {error_msg}")
         raise HTTPException(
             status_code=500,
-            detail=f"Frame extraction failed: {str(e)}. Make sure FFmpeg is installed and the video file is valid."
+            detail=f"FFmpeg failed to process video. Error: {error_msg}. Check if the video file is valid and FFmpeg is properly installed."
+        )
+    except Exception as e:
+        logger.error(f"Frame extraction failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Frame extraction failed: {str(e)}. Ensure FFmpeg is installed, the video file is valid, and the server has write permissions. See FFMPEG_TROUBLESHOOTING.md for help."
         )
 
 

@@ -193,6 +193,10 @@ fastapi/app/storage/projects/*
 !fastapi/app/storage/scripts/.gitkeep
 !fastapi/app/storage/projects/.gitkeep
 
+# FFmpeg local installation (downloaded by setup script)
+fastapi/ffmpeg/
+fastapi/temp_ffmpeg/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -56,10 +56,48 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
 
+    # ── FFmpeg Configuration ──────────────────────────────
+    ffmpeg_path: str = ""  # Optional: absolute path to ffmpeg executable
+    ffprobe_path: str = ""  # Optional: absolute path to ffprobe executable
+    use_mock_processor: bool = False  # Set to True to use mock processor without FFmpeg
+
     # ── Derived helpers ───────────────────────────────────
     @property
     def project_root(self) -> Path:
         return _PROJECT_ROOT
+    
+    @property
+    def local_ffmpeg_path(self) -> Path:
+        """Path to local FFmpeg installation in fastapi/ffmpeg/bin/"""
+        return _PROJECT_ROOT / "ffmpeg" / "bin"
+    
+    @property
+    def ffmpeg_executable(self) -> str:
+        """Get FFmpeg executable path (configured, local, or system)."""
+        if self.ffmpeg_path:
+            return self.ffmpeg_path
+        
+        # Check local installation
+        local_ffmpeg = self.local_ffmpeg_path / "ffmpeg.exe"
+        if local_ffmpeg.exists():
+            return str(local_ffmpeg)
+        
+        # Fall back to system PATH
+        return "ffmpeg"
+    
+    @property
+    def ffprobe_executable(self) -> str:
+        """Get FFprobe executable path (configured, local, or system)."""
+        if self.ffprobe_path:
+            return self.ffprobe_path
+        
+        # Check local installation
+        local_ffprobe = self.local_ffmpeg_path / "ffprobe.exe"
+        if local_ffprobe.exists():
+            return str(local_ffprobe)
+        
+        # Fall back to system PATH
+        return "ffprobe"
 
     def resolve_path(self, relative: str) -> Path:
         """Resolve a storage path relative to the project root and ensure it exists."""
