@@ -197,7 +197,7 @@ export default function ProjectCreate() {
                     }}
                     onClick={() => !file && document.getElementById('file-input').click()}
                   >
-                    <input id="file-input" type="file" accept=".pdf,.txt,.docx" style={{ display: 'none' }} onChange={onDrop} />
+                    <input id="file-input" type="file" accept=".pdf,.txt,.docx,.pptx,.csv,.xlsx,.md" style={{ display: 'none' }} onChange={onDrop} />
                     {file ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                         <FileText size={20} color="var(--gold-primary)" />

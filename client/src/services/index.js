@@ -38,6 +38,25 @@ export const videoService = {
   getById: (id) => api.get(`/videos/${id}`),
   getStatus: (id) => api.get(`/videos/${id}/status`),
   getByProject: (projectId) => api.get(`/videos?projectId=${projectId}`),
+  
+  // Document upload and processing
+  uploadDocument: (formData) => api.post('/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000, // 2 minutes for large files
+  }),
+  
+  // Script generation and enhancement
+  generateScript: (documentId, settings) => api.post(`/documents/${documentId}/generate-script`, settings),
+  enhanceScript: (documentId) => api.post(`/enhance-script/${documentId}`),
+  
+  // Asset generation
+  generateImage: (sceneId, prompt) => api.post(`/scenes/${sceneId}/generate-image`, { prompt }),
+  generateAudio: (sceneId, text, settings) => api.post(`/scenes/${sceneId}/generate-audio`, { text, ...settings }),
+  generateSubtitles: (sceneId) => api.post(`/scenes/${sceneId}/generate-subtitles`),
+  
+  // Video rendering
+  renderScene: (sceneId) => api.post(`/scenes/${sceneId}/render`),
+  assembleVideo: (projectId) => api.post(`/projects/${projectId}/assemble`),
 };
 
 // ─── Scenes ───────────────────────────────────────────────────────────────────
@@ -48,6 +67,11 @@ export const sceneService = {
   update: (id, data) => api.put(`/scenes/${id}`, data),
   regenerate: (id, regenerateType) => api.post(`/scenes/${id}/regenerate`, { regenerateType }),
   factCheck: (id, sourceText) => api.post(`/scenes/${id}/fact-check`, { sourceText }),
+  
+  // New scene management endpoints
+  regenerateScene: (projectId, sceneId) => api.post(`/regenerate-scene/${projectId}/${sceneId}`),
+  updateSceneDuration: (projectId, sceneId, duration) => api.patch(`/update-scene-duration/${projectId}/${sceneId}`, { duration }),
+  regenerateAllPrompts: (projectId) => api.post(`/regenerate-all-prompts/${projectId}`),
 };
 
 // ─── Edits ────────────────────────────────────────────────────────────────────

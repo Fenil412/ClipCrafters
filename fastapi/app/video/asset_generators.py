@@ -41,6 +41,7 @@ class AudioGenerationService:
 
 
 class ImageProvider(str, Enum):
+    POLLINATIONS = "pollinations"
     GEMINI = "gemini"
     STABILITY = "stabilityai"
 
@@ -227,16 +228,28 @@ class ImageGenerationService:
         output_path: str,
         style_preset: str = "cinematic_educational",
         negative_prompt: Optional[str] = None,
-        provider: str = ImageProvider.GEMINI.value
+        provider: str = ImageProvider.POLLINATIONS.value,
+        scene_number: Optional[int] = None,
+        scene_id: Optional[str] = None
     ) -> str:
         """
-        Produce an image from a prompt using Gemini or Stability.ai.
+        Produce an image from a prompt using Pollinations, Gemini, or Stability.ai.
         Saves to output_path and returns the path on success.
         
         Priority:
-        1. Try specified provider (Gemini or Stability)
-        2. If fails, try the other provider as fallback
-        3. If both fail, raise detailed error
+        1. Try Pollinations (free, no API key required)
+        2. If fails, try Stability.ai
+        3. If fails, try Gemini
+        4. If all fail, raise detailed error
+        
+        Args:
+            prompt: The image generation prompt
+            output_path: Where to save the generated image
+            style_preset: Visual style preset
+            negative_prompt: What to avoid in the image
+            provider: Preferred provider (pollinations, stabilityai, gemini)
+            scene_number: Scene number for uniqueness
+            scene_id: Scene ID for uniqueness
         """
         # Validate inputs
         if not prompt or not prompt.strip():
@@ -251,59 +264,159 @@ class ImageGenerationService:
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        primary_provider = provider if provider in [ImageProvider.GEMINI.value, ImageProvider.STABILITY.value] else ImageProvider.GEMINI.value
-        fallback_provider = ImageProvider.STABILITY.value if primary_provider == ImageProvider.GEMINI.value else ImageProvider.GEMINI.value
+        # Determine provider order
+        if provider == ImageProvider.POLLINATIONS.value:
+            providers_to_try = [ImageProvider.POLLINATIONS.value, ImageProvider.STABILITY.value, ImageProvider.GEMINI.value]
+        elif provider == ImageProvider.STABILITY.value:
+            providers_to_try = [ImageProvider.STABILITY.value, ImageProvider.POLLINATIONS.value, ImageProvider.GEMINI.value]
+        elif provider == ImageProvider.GEMINI.value:
+            providers_to_try = [ImageProvider.GEMINI.value, ImageProvider.POLLINATIONS.value, ImageProvider.STABILITY.value]
+        else:
+            providers_to_try = [ImageProvider.POLLINATIONS.value, ImageProvider.STABILITY.value, ImageProvider.GEMINI.value]
         
-        primary_error = None
-        fallback_error = None
+        errors = {}
         
-        # Try primary provider
-        try:
-            logger.info(f"Attempting image generation with primary provider: {primary_provider}")
-            if primary_provider == ImageProvider.GEMINI.value:
-                return await ImageGenerationService.generate_image_with_gemini(
-                    prompt, output_path, style_preset, negative_prompt
-                )
-            else:
-                return await ImageGenerationService.generate_image_with_stability(
-                    prompt, output_path, style_preset, negative_prompt
-                )
-        except Exception as e:
-            primary_error = str(e)
-            logger.error(f"Primary provider {primary_provider} failed: {primary_error}", exc_info=True)
+        # Try each provider in order
+        for current_provider in providers_to_try:
+            try:
+                logger.info(f"Attempting image generation with provider: {current_provider}")
+                
+                if current_provider == ImageProvider.POLLINATIONS.value:
+                    return await ImageGenerationService.generate_image_with_pollinations(
+                        prompt, output_path, style_preset, negative_prompt, scene_number, scene_id
+                    )
+                elif current_provider == ImageProvider.STABILITY.value:
+                    return await ImageGenerationService.generate_image_with_stability(
+                        prompt, output_path, style_preset, negative_prompt
+                    )
+                elif current_provider == ImageProvider.GEMINI.value:
+                    return await ImageGenerationService.generate_image_with_gemini(
+                        prompt, output_path, style_preset, negative_prompt
+                    )
+                    
+            except Exception as e:
+                error_msg = str(e)
+                errors[current_provider] = error_msg
+                logger.error(f"Provider {current_provider} failed: {error_msg}", exc_info=True)
         
-        # Try fallback provider
-        try:
-            logger.info(f"Attempting image generation with fallback provider: {fallback_provider}")
-            if fallback_provider == ImageProvider.GEMINI.value:
-                return await ImageGenerationService.generate_image_with_gemini(
-                    prompt, output_path, style_preset, negative_prompt
-                )
-            else:
-                return await ImageGenerationService.generate_image_with_stability(
-                    prompt, output_path, style_preset, negative_prompt
-                )
-        except Exception as e:
-            fallback_error = str(e)
-            logger.error(f"Fallback provider {fallback_provider} failed: {fallback_error}", exc_info=True)
-        
-        # Both providers failed - raise detailed error
+        # All providers failed - raise detailed error
+        error_details = "\n".join([f"  {prov}: {err}" for prov, err in errors.items()])
         error_message = (
-            f"Image generation failed with both providers.\n\n"
-            f"Primary Provider ({primary_provider}):\n"
-            f"  Error: {primary_error}\n\n"
-            f"Fallback Provider ({fallback_provider}):\n"
-            f"  Error: {fallback_error}\n\n"
+            f"Image generation failed with all providers.\n\n"
+            f"{error_details}\n\n"
             f"Please check:\n"
-            f"1. API keys are configured correctly in .env file\n"
-            f"2. API keys have sufficient credits/quota\n"
-            f"3. Network connectivity is working\n"
+            f"1. Network connectivity is working\n"
+            f"2. API keys are configured correctly in .env file (for Stability/Gemini)\n"
+            f"3. API keys have sufficient credits/quota\n"
             f"4. The prompt is valid and not violating content policies\n\n"
             f"Prompt: {prompt[:200]}..."
         )
         
         logger.error(error_message)
         raise RuntimeError(error_message)
+
+    @staticmethod
+    async def generate_image_with_pollinations(
+        prompt: str,
+        output_path: str,
+        style_preset: str,
+        negative_prompt: Optional[str],
+        scene_number: Optional[int] = None,
+        scene_id: Optional[str] = None
+    ) -> str:
+        """
+        Pollinations.ai Image Generation (Free, no API key required).
+        Uses simple URL-based API: https://image.pollinations.ai/prompt/{prompt}
+        Raises exception if generation fails.
+        
+        Args:
+            prompt: The image generation prompt
+            output_path: Where to save the image
+            style_preset: Visual style preset
+            negative_prompt: What to avoid
+            scene_number: Scene number for uniqueness
+            scene_id: Scene ID for uniqueness
+        """
+        final_prompt, _ = ImageGenerationService._build_high_quality_prompt(
+            prompt=prompt,
+            style_preset=style_preset,
+            negative_prompt=negative_prompt,
+            provider="pollinations"
+        )
+
+        # Add scene-specific context to make each image unique
+        # This ensures different scenes get different images even with similar prompts
+        if scene_number is not None:
+            final_prompt = f"Scene {scene_number}: {final_prompt}"
+        
+        # Add scene ID hash as additional uniqueness factor
+        if scene_id:
+            # Use last 8 characters of scene_id as a unique identifier
+            unique_id = scene_id[-8:] if len(scene_id) >= 8 else scene_id
+            final_prompt = f"{final_prompt} [ID:{unique_id}]"
+
+        logger.info(f"Pollinations.ai Prompt (Scene {scene_number}): '{final_prompt[:150]}...'")
+
+        # URL encode the prompt
+        import urllib.parse
+        encoded_prompt = urllib.parse.quote(final_prompt)
+        
+        # Pollinations API URL with parameters for better quality
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+        
+        # Generate a unique seed based on scene_id to ensure different images
+        import hashlib
+        seed = -1  # Default random seed
+        if scene_id:
+            # Create a deterministic but unique seed from scene_id
+            seed_hash = hashlib.md5(scene_id.encode()).hexdigest()
+            seed = int(seed_hash[:8], 16) % 1000000  # Convert to number
+        
+        # Add quality parameters
+        params = {
+            "width": "1024",
+            "height": "1024",
+            "seed": str(seed),  # Unique seed per scene
+            "nologo": "true",  # Remove watermark
+            "enhance": "true"  # Enable enhancement
+        }
+        
+        # Build full URL with parameters
+        param_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        full_url = f"{url}?{param_string}"
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                logger.info(f"Requesting image from Pollinations.ai (seed: {seed})...")
+                response = await client.get(full_url)
+                
+                if response.status_code == 200:
+                    # Save the image
+                    with open(output_path, "wb") as f:
+                        f.write(response.content)
+                    logger.info(f"Pollinations.ai image saved to {output_path}")
+                    return output_path
+                else:
+                    error_text = response.text[:500] if response.text else "No error message"
+                    logger.error(f"Pollinations.ai API Error ({response.status_code}): {error_text}")
+                    raise RuntimeError(
+                        f"Pollinations.ai API error (HTTP {response.status_code}): {error_text}"
+                    )
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Pollinations.ai request timed out: {e}")
+            raise RuntimeError(
+                f"Pollinations.ai request timed out after 60 seconds. "
+                f"This may indicate network issues or high API load."
+            )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error(f"Pollinations.ai generation failed: {e}", exc_info=True)
+            raise RuntimeError(
+                f"Pollinations.ai image generation failed: {str(e)}. "
+                f"Please check your network connection."
+            )
 
     @staticmethod
     async def generate_image_with_stability(
@@ -333,7 +446,7 @@ class ImageGenerationService:
 
         logger.info(f"Stability.ai Prompt: '{final_prompt[:150]}...'")
 
-        url = "https://api.stability.ai/v2beta/stable-image/generate/sd3"
+        url = settings.stability_api_url
 
         headers = {
             "authorization": f"Bearer {api_key}",

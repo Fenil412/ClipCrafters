@@ -173,13 +173,13 @@ async def generate_fallback_for_document(document_id: str):
 
 @router.post("/upload-document", response_model=UploadResponse, tags=["Documents"])
 async def upload_document(file: UploadFile = File(...)):
-    """Upload a document (PDF, DOCX, PPTX, TXT) for processing."""
+    """Upload a document (PDF, DOCX, PPTX, TXT, CSV, XLSX, MD) for processing."""
 
     # Validate extension
     if not file.filename or not validate_file_extension(file.filename):
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type. Allowed: pdf, docx, pptx, txt.",
+            detail=f"Unsupported file type. Allowed: pdf, docx, pptx, txt, csv, xlsx, md.",
         )
 
     # Read content and validate size

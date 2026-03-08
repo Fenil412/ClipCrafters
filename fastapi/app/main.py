@@ -16,8 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router as doc_router
 from app.api.video_routes import router as video_router
 from app.api.video_upload_routes import router as video_upload_router
+from app.api.enhancement_routes import router as enhancement_router
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.utils.ffmpeg_utils import FFmpegUtils
 
 logger = get_logger(__name__)
 
@@ -34,6 +36,14 @@ async def lifespan(app: FastAPI):
     for dir_attr in ("upload_dir", "index_dir", "parsed_dir", "scripts_dir", "projects_dir"):
         settings.resolve_path(getattr(settings, dir_attr))
     logger.info("Storage directories ready")
+    
+    # Check FFmpeg availability
+    ffmpeg_available, ffmpeg_msg = FFmpegUtils.check_ffmpeg_available()
+    if ffmpeg_available:
+        logger.info(ffmpeg_msg)
+    else:
+        logger.warning(f"FFmpeg check: {ffmpeg_msg}")
+        logger.warning("Video processing features may be limited without FFmpeg")
 
     yield
 
@@ -70,6 +80,7 @@ app.mount(
 app.include_router(doc_router)
 app.include_router(video_router)
 app.include_router(video_upload_router)
+app.include_router(enhancement_router)
 
 
 # ── Root redirect to UI ──────────────────────────────────────────

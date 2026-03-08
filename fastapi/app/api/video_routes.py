@@ -12,6 +12,7 @@ from app.video.project_manager import ProjectMetadataManager, TimelineService
 from app.video.asset_generators import AudioGenerationService, ImageGenerationService, ImageProvider
 from app.video.visual_planner import VisualPlannerService
 from app.video.clip_renderer import SceneClipService, FinalRenderService
+from app.video.subtitle_service import SubtitleService
 from datetime import datetime
 from app.core.logger import get_logger
 
@@ -163,7 +164,9 @@ async def generate_scene_image(project_id: str, scene_id: str, request: AssetGen
             output_path=image_path,
             style_preset=final_style_preset,
             negative_prompt=final_negative_prompt,
-            provider=request.image_provider or scene.image_provider or ImageProvider.GEMINI.value
+            provider=request.image_provider or scene.image_provider or ImageProvider.POLLINATIONS.value,
+            scene_number=scene.scene_order,
+            scene_id=scene_id
         )
         
         if not os.path.exists(image_path):
@@ -264,9 +267,48 @@ async def upload_scene_image(
     return scene
 
 
+@router.post("/scenes/{scene_id}/generate-subtitles", response_model=SceneResponse)
+async def generate_scene_subtitles(
+    project_id: str,
+    scene_id: str,
+    use_whisper: bool = False
+):
+    """Generate SRT subtitle file for a scene."""
+    scene = _get_scene(project_id, scene_id)
+    
+    if not scene.audio_path or not os.path.exists(scene.audio_path):
+        raise HTTPException(status_code=400, detail="Audio must be generated before creating subtitles")
+    
+    proj_dir = ProjectMetadataManager.get_project_dir(project_id)
+    subtitles_dir = os.path.join(proj_dir, "subtitles")
+    os.makedirs(subtitles_dir, exist_ok=True)
+    
+    subtitle_path = os.path.join(subtitles_dir, f"{scene_id}.srt")
+    
+    try:
+        SubtitleService.generate_subtitles_for_scene(
+            narration_text=scene.narration_text,
+            audio_path=scene.audio_path,
+            duration=scene.actual_duration or scene.estimated_duration or 10.0,
+            output_path=subtitle_path,
+            use_whisper=use_whisper
+        )
+        
+        # Store subtitle path in scene metadata (add to model if needed)
+        scene.clip_status = AssetStatus.MISSING  # Clip needs regeneration with subtitles
+        _update_scene(project_id, scene_id, scene)
+        
+        logger.info(f"Generated subtitles for scene {scene_id}")
+        return scene
+        
+    except Exception as e:
+        logger.error(f"Subtitle generation failed for {scene_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Subtitle generation failed: {str(e)}")
+
+
 @router.post("/scenes/{scene_id}/generate-clip", response_model=SceneResponse)
-async def generate_scene_clip(project_id: str, scene_id: str):
-    """Combines the generated image and audio into an MP4 clip."""
+async def generate_scene_clip(project_id: str, scene_id: str, include_subtitles: bool = False):
+    """Combines the generated image and audio into an MP4 clip, optionally with subtitles."""
     scene = _get_scene(project_id, scene_id)
     
     if not scene.audio_path or not scene.image_path:
@@ -278,11 +320,31 @@ async def generate_scene_clip(project_id: str, scene_id: str):
     proj_dir = ProjectMetadataManager.get_project_dir(project_id)
     clip_path = os.path.join(proj_dir, "clips", f"{scene_id}.mp4")
     
+    # Generate subtitles if requested
+    subtitle_path = None
+    if include_subtitles:
+        subtitles_dir = os.path.join(proj_dir, "subtitles")
+        os.makedirs(subtitles_dir, exist_ok=True)
+        subtitle_path = os.path.join(subtitles_dir, f"{scene_id}.srt")
+        
+        try:
+            SubtitleService.generate_subtitles_for_scene(
+                narration_text=scene.narration_text,
+                audio_path=scene.audio_path,
+                duration=scene.actual_duration or scene.estimated_duration or 10.0,
+                output_path=subtitle_path,
+                use_whisper=False
+            )
+        except Exception as e:
+            logger.warning(f"Subtitle generation failed, continuing without: {e}")
+            subtitle_path = None
+    
     try:
         SceneClipService.render_scene_clip(
             image_path=scene.image_path,
             audio_path=scene.audio_path,
-            output_path=clip_path
+            output_path=clip_path,
+            subtitle_path=subtitle_path
         )
         scene.clip_path = clip_path
         scene.clip_status = AssetStatus.READY

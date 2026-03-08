@@ -353,7 +353,9 @@ export default function Storyboard({ videoId, isOpen, onClose, videoStatus = 'co
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
               <button
                 className="btn-icon"
-                style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--gradient-gold)', border: 'none', color: '#0a0806' }}
+                style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--audio-btn-bg)', border: 'none', color: 'var(--audio-btn-text)', transition: 'all 0.3s ease' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--audio-btn-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--audio-btn-bg)'}
                 onClick={() => {
                   if (audioRef.current) {
                     audioPlaying ? audioRef.current.pause() : audioRef.current.play();

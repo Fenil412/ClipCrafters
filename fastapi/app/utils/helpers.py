@@ -12,7 +12,7 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 # Allowed file extensions (lowercase, without dot)
-ALLOWED_EXTENSIONS = {"pdf", "docx", "pptx", "txt"}
+ALLOWED_EXTENSIONS = {"pdf", "docx", "pptx", "txt", "csv", "xlsx", "md"}
 
 
 def generate_document_id() -> str:

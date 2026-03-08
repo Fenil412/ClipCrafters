@@ -33,6 +33,16 @@
   --accent-dark: #9333ea;
   --accent-subtle: rgba(168, 85, 247, 0.1);
 
+  /* Audio Button - Emerald Green */
+  --audio-btn-bg: #10b981;
+  --audio-btn-hover: #059669;
+  --audio-btn-text: #ffffff;
+
+  /* Gold/Accent colors (legacy support) */
+  --gold-primary: #c9a84c;
+  --gold-subtle: rgba(201, 168, 76, 0.1);
+  --gradient-gold: linear-gradient(135deg, #c9a84c 0%, #d4af37 100%);
+
   /* Borders */
   --border-default: rgba(99, 102, 241, 0.15);
   --border-hover: rgba(99, 102, 241, 0.3);
@@ -84,6 +94,17 @@
   --accent-light: #a855f7;
   --accent-dark: #7e22ce;
   --accent-subtle: rgba(147, 51, 234, 0.1);
+
+  /* Audio Button - Emerald Green */
+  --audio-btn-bg: #10b981;
+  --audio-btn-hover: #059669;
+  --audio-btn-text: #ffffff;
+
+  /* Gold/Accent colors (legacy support) */
+  --gold-primary: #d4af37;
+  --gold-subtle: rgba(212, 175, 55, 0.15);
+  --gradient-gold: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+
   --border-default: rgba(79, 70, 229, 0.2);
   --border-hover: rgba(79, 70, 229, 0.35);
   --border-active: rgba(79, 70, 229, 0.55);

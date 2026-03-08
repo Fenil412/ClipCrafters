@@ -106,3 +106,65 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// ─────────── VIDEO GENERATION API ──────────────────────────────────────────
+export const videoAPI = {
+  // Document upload and parsing
+  uploadDocument: (formData) => api.post('/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000, // 2 minutes for large files
+  }),
+
+  // Script generation and enhancement
+  generateScript: (documentId, settings) => api.post(`/documents/${documentId}/generate-script`, settings),
+  enhanceScript: (documentId) => api.post(`/enhance-script/${documentId}`),
+
+  // Scene management
+  getScenes: (projectId) => api.get(`/projects/${projectId}/scenes`),
+  regenerateScene: (projectId, sceneId) => api.post(`/regenerate-scene/${projectId}/${sceneId}`),
+  updateSceneDuration: (projectId, sceneId, duration) => api.patch(`/update-scene-duration/${projectId}/${sceneId}`, { duration }),
+  regenerateAllPrompts: (projectId) => api.post(`/regenerate-all-prompts/${projectId}`),
+
+  // Asset generation
+  generateImage: (sceneId, prompt) => api.post(`/scenes/${sceneId}/generate-image`, { prompt }),
+  generateAudio: (sceneId, text, settings) => api.post(`/scenes/${sceneId}/generate-audio`, { text, ...settings }),
+  generateSubtitles: (sceneId) => api.post(`/scenes/${sceneId}/generate-subtitles`),
+
+  // Video rendering
+  renderScene: (sceneId) => api.post(`/scenes/${sceneId}/render`),
+  assembleVideo: (projectId) => api.post(`/projects/${projectId}/assemble`),
+  
+  // Status checks
+  getProjectStatus: (projectId) => api.get(`/projects/${projectId}/status`),
+  getSceneStatus: (sceneId) => api.get(`/scenes/${sceneId}/status`),
+};
+
+// ─────────── AUTHENTICATION API ────────────────────────────────────────────
+export const authAPI = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (userData) => api.post('/auth/register', userData),
+  logout: () => api.post('/auth/logout'),
+  refreshToken: (refreshToken) => api.post('/auth/refresh', { refreshToken }),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
+  getCurrentUser: () => api.get('/auth/me'),
+};
+
+// ─────────── PROJECT API ────────────────────────────────────────────────────
+export const projectAPI = {
+  getAll: () => api.get('/projects'),
+  getById: (id) => api.get(`/projects/${id}`),
+  create: (data) => api.post('/projects', data),
+  update: (id, data) => api.put(`/projects/${id}`, data),
+  delete: (id) => api.delete(`/projects/${id}`),
+};
+
+// ─────────── USER API ───────────────────────────────────────────────────────
+export const userAPI = {
+  getProfile: () => api.get('/users/profile'),
+  updateProfile: (data) => api.put('/users/profile', data),
+  updatePassword: (data) => api.put('/users/password', data),
+  uploadAvatar: (formData) => api.post('/users/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};

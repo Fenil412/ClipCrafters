@@ -26,9 +26,14 @@ class Settings(BaseSettings):
 
     # ── Stability.ai ──────────────────────────────────────
     stability_api_key: str = ""
+    stability_api_url: str = "https://api.stability.ai/v2beta/stable-image/generate/sd3"
 
     # ── Gemini Image API ──────────────────────────────────
     gemini_api_key: str = ""
+    
+    # ── Murf AI TTS API ───────────────────────────────────
+    murf_api_key: str = ""
+    murf_api_url: str = "https://api.murf.ai/v1/speech/generate"
 
     # ── Embedding Model ───────────────────────────────────
     embedding_model_name: str = "all-MiniLM-L6-v2"

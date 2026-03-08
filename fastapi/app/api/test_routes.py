@@ -36,7 +36,7 @@ async def test_murf_api(language: str = "English"):
     voice = AudioGenerationService.get_voice_for_language(language)
     
     # Test with a simple API call
-    url = "https://api.murf.ai/v1/speech/generate"
+    url = settings.murf_api_url
     
     headers = {
         "api-key": api_key,

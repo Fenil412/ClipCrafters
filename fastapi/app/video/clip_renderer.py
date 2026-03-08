@@ -4,6 +4,7 @@ import moviepy as mp
 from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 
 from app.core.logger import get_logger
+from app.utils.ffmpeg_utils import FFmpegUtils
 
 logger = get_logger(__name__)
 
@@ -15,10 +16,22 @@ class SceneClipService:
     """Renders final video clips by combining static images with synchronized audio."""
 
     @staticmethod
-    def render_scene_clip(image_path: str, audio_path: str, output_path: str) -> Optional[str]:
+    def render_scene_clip(
+        image_path: str,
+        audio_path: str,
+        output_path: str,
+        subtitle_path: Optional[str] = None
+    ) -> Optional[str]:
         """
         Combines an image and an audio file into an MP4 video clip.
         Handles resizing, padding to 720p, and precise audio duration matching.
+        Optionally burns in subtitles.
+        
+        Args:
+            image_path: Path to scene image
+            audio_path: Path to scene audio
+            output_path: Path to save video clip
+            subtitle_path: Optional path to SRT subtitle file
         """
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image not found at {image_path}")
@@ -72,6 +85,22 @@ class SceneClipService:
             image_clip.close()
             final_clip.close()
             
+            # 7. Add subtitles if provided (using FFmpeg)
+            if subtitle_path and os.path.exists(subtitle_path):
+                try:
+                    temp_output = output_path + ".temp.mp4"
+                    os.rename(output_path, temp_output)
+                    
+                    FFmpegUtils.add_subtitles(temp_output, subtitle_path, output_path)
+                    os.remove(temp_output)
+                    
+                    logger.info(f"Added subtitles to {output_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to add subtitles: {e}")
+                    # Restore original if subtitle addition failed
+                    if os.path.exists(temp_output):
+                        os.rename(temp_output, output_path)
+            
             logger.info(f"Successfully rendered: {output_path}")
             return output_path
             
@@ -87,7 +116,7 @@ class FinalRenderService:
     def concatenate_scene_clips(clip_paths: List[str], final_output_path: str) -> Optional[str]:
         """
         Assembles a list of MP4 clips into one final video.
-        Uses MoviePy concatenation for stable transition handling.
+        Uses FFmpeg concat for faster processing when possible, falls back to MoviePy.
         """
         if not clip_paths:
             logger.error("No clips provided for final rendering.")
@@ -95,6 +124,13 @@ class FinalRenderService:
 
         logger.info(f"Starting final render for {len(clip_paths)} clips...")
         
+        # Try FFmpeg concat first (faster)
+        try:
+            return FFmpegUtils.merge_videos_concat(clip_paths, final_output_path)
+        except Exception as e:
+            logger.warning(f"FFmpeg concat failed, falling back to MoviePy: {e}")
+        
+        # Fallback to MoviePy
         try:
             clips = []
             for path in clip_paths:

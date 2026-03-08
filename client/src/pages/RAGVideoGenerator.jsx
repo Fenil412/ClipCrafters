@@ -47,8 +47,8 @@ export default function RAGVideoGenerator() {
 
   const handleFileSelect = (file) => {
     const ext = file.name.split('.').pop().toLowerCase();
-    if (!['pdf', 'docx', 'pptx', 'txt'].includes(ext)) {
-      toast.error('Unsupported file type. Use PDF, DOCX, PPTX, or TXT.');
+    if (!['pdf', 'docx', 'pptx', 'txt', 'csv', 'xlsx', 'md'].includes(ext)) {
+      toast.error('Unsupported file type. Use PDF, DOCX, PPTX, TXT, CSV, XLSX, or MD.');
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
@@ -501,7 +501,7 @@ export default function RAGVideoGenerator() {
               id="file-input"
               type="file"
               className="hidden"
-              accept=".pdf,.docx,.pptx,.txt"
+              accept=".pdf,.docx,.pptx,.txt,.csv,.xlsx,.md"
               onChange={(e) => e.target.files.length && handleFileSelect(e.target.files[0])}
             />
             <Upload className="w-10 h-10 mx-auto mb-2 text-[var(--text-muted)]" />
@@ -968,7 +968,7 @@ function StoryboardSection({ scenes, currentDocId, storyboardStatus, finalVideo,
                     const audio = document.getElementById(`audio-${selectedScene.scene_id}`);
                     if (audio) audio.play();
                   }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--gold-primary)] text-black rounded-lg hover:opacity-90 transition-all font-semibold"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--audio-btn-bg)] hover:bg-[var(--audio-btn-hover)] text-[var(--audio-btn-text)] rounded-lg transition-all font-semibold shadow-md hover:shadow-lg"
                 >
                   <Play className="w-4 h-4" />
                   Hear Audio

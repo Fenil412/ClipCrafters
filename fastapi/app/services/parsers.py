@@ -192,6 +192,140 @@ class TXTParser:
         }]
 
 
+# ────────────────────────────── CSV Parser ─────────────────────────
+
+
+class CSVParser:
+    """Extract text from CSV files using pandas."""
+
+    def parse(self, file_path: Path) -> list[dict]:
+        import pandas as pd
+
+        logger.info("Parsing CSV: %s", file_path.name)
+        try:
+            df = pd.read_csv(str(file_path))
+            
+            # Convert DataFrame to readable text format
+            text_parts = []
+            
+            # Add column headers
+            text_parts.append("Columns: " + ", ".join(df.columns))
+            
+            # Add row data
+            for idx, row in df.iterrows():
+                row_text = " | ".join([f"{col}: {val}" for col, val in row.items()])
+                text_parts.append(row_text)
+            
+            combined_text = clean_text("\n".join(text_parts))
+            
+            return [{
+                "text": combined_text,
+                "page_number": 1,
+                "section_heading": "CSV Data",
+            }]
+        except Exception as exc:
+            logger.error("Failed to parse CSV %s: %s", file_path.name, exc)
+            raise
+
+
+# ────────────────────────────── XLSX Parser ────────────────────────
+
+
+class XLSXParser:
+    """Extract text from Excel files using openpyxl."""
+
+    def parse(self, file_path: Path) -> list[dict]:
+        import pandas as pd
+
+        logger.info("Parsing XLSX: %s", file_path.name)
+        pages: list[dict] = []
+        
+        try:
+            # Read all sheets
+            excel_file = pd.ExcelFile(str(file_path))
+            
+            for sheet_num, sheet_name in enumerate(excel_file.sheet_names, start=1):
+                df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                
+                # Convert sheet to text
+                text_parts = []
+                text_parts.append(f"Sheet: {sheet_name}")
+                text_parts.append("Columns: " + ", ".join(df.columns))
+                
+                for idx, row in df.iterrows():
+                    row_text = " | ".join([f"{col}: {val}" for col, val in row.items()])
+                    text_parts.append(row_text)
+                
+                combined_text = clean_text("\n".join(text_parts))
+                
+                if combined_text:
+                    pages.append({
+                        "text": combined_text,
+                        "page_number": sheet_num,
+                        "section_heading": sheet_name,
+                    })
+            
+            logger.info("Extracted %d sheets from XLSX", len(pages))
+            return pages
+            
+        except Exception as exc:
+            logger.error("Failed to parse XLSX %s: %s", file_path.name, exc)
+            raise
+
+
+# ────────────────────────────── MD Parser ──────────────────────────
+
+
+class MDParser:
+    """Extract text from Markdown files."""
+
+    def parse(self, file_path: Path) -> list[dict]:
+        logger.info("Parsing MD: %s", file_path.name)
+        pages: list[dict] = []
+        
+        try:
+            raw = file_path.read_text(encoding="utf-8", errors="replace")
+            
+            # Split by headers (# Header)
+            sections = re.split(r'\n(?=#{1,6}\s)', raw)
+            
+            for idx, section in enumerate(sections, start=1):
+                section = section.strip()
+                if not section:
+                    continue
+                
+                # Extract heading
+                heading_match = re.match(r'^#{1,6}\s+(.+?)$', section, re.MULTILINE)
+                heading = heading_match.group(1) if heading_match else None
+                
+                # Clean text
+                text = clean_text(section)
+                
+                if text:
+                    pages.append({
+                        "text": text,
+                        "page_number": idx,
+                        "section_heading": heading,
+                    })
+            
+            # If no sections found, treat as single page
+            if not pages:
+                text = clean_text(raw)
+                if text:
+                    pages.append({
+                        "text": text,
+                        "page_number": 1,
+                        "section_heading": None,
+                    })
+            
+            logger.info("Extracted %d sections from MD", len(pages))
+            return pages
+            
+        except Exception as exc:
+            logger.error("Failed to parse MD %s: %s", file_path.name, exc)
+            raise
+
+
 # ────────────────────────────── Factory ────────────────────────────
 
 
@@ -200,6 +334,9 @@ _PARSER_MAP: dict[str, type] = {
     "docx": DOCXParser,
     "pptx": PPTXParser,
     "txt": TXTParser,
+    "csv": CSVParser,
+    "xlsx": XLSXParser,
+    "md": MDParser,
 }
 
 
